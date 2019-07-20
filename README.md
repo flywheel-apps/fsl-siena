@@ -12,4 +12,4 @@ the brain change between the two time points. It is also possible to project the
 standard space in a way that allows for multi-subject voxelwise statistical testing. An extension for ventricular 
 analysis is provided in FSL5.
 
-Additional documentation and usage can be found at [FMRIB](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/SIENA).
+Additional documentation and information on usage can be found at [FMRIB](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/SIENA).
