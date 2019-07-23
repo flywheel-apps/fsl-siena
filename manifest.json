@@ -5,8 +5,7 @@
 	"version": "1.0.0_5.0",
 	"inputs": {
 		"key": {
-      "base": "api-key",
-      "read-only": true
+      "base": "api-key"
     },
 		"NIFTI_1": {
 			"base": "file",
