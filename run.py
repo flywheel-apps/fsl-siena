@@ -4,6 +4,7 @@ import os
 import logging
 import re
 import json
+import time
 import base64
 import bs4
 import zipfile
@@ -85,7 +86,7 @@ def create_options_list(config_dict, manifest_path='/flywheel/v0/manifest.json')
                     config_value = '"{}"'.format(config_value)
                 # Siena/x still try and run and generate errors on nonsense values like "squirrel", prohibit this
                 if key in ['TOP', 'BOTTOM']:
-                    number_pattern = re.compile('^[-+]?[0-9]+[.]?[0-9]+$')
+                    number_pattern = re.compile('^[-+]?\d+(?:\.\d+)?')
                     if not number_pattern.match(config_value):
                         log.error('{} value {} is not a number!'.format(key, config_value))
                         log.error('Algorithm will not run. Exiting...')
@@ -132,8 +133,8 @@ def convert_img_paths_to_b64(input_html_path, output_html_path):
     """
     input_html_dir = os.path.dirname(input_html_path)
     try:
-        with open(input_html_path, 'r') as html_file:
-            soup = bs4.BeautifulSoup(html_file, 'html.parser')
+        with open(input_html_path, 'r') as func_html_file:
+            soup = bs4.BeautifulSoup(func_html_file, 'html.parser')
     except FileNotFoundError:
         log.warning('Could not find {}'.format(input_html_path))
         log.warning('No html files will be modified')
@@ -163,18 +164,18 @@ def convert_img_paths_to_b64(input_html_path, output_html_path):
 
 def parse_report_metadata(report_file_path):
     """
-    parses parameters from report.siena or report.sienax given a report filepath
-    :param report_file_path: (str) path to report.siena/sienax
+    parses parameters from report.siena, report.viena or report.sienax given a report filepath
+    :param report_file_path: (str) path to report.siena/viena/sienax
     :return:
     """
     basename = os.path.basename(report_file_path)
     with open(report_file_path, 'r', encoding='utf-8') as f:
-        report = f.readlines()
+        func_report = f.readlines()
     if basename == 'report.siena':
         report_tuple = ('AREA', 'VOLC', 'RATIO', 'PBVC', 'finalPBVC')
-        report = [line for line in report if line.startswith(report_tuple)]
+        func_report = [line for line in func_report if line.startswith(report_tuple)]
         report_dict = dict()
-        for line in report:
+        for line in func_report:
             key = line.split()[0]
             value = line.split()[1]
             if (key+'1') in report_dict.keys():
@@ -187,13 +188,30 @@ def parse_report_metadata(report_file_path):
         return report_dict
     elif basename == 'report.sienax':
         report_tuple = ('GREY', 'WHITE', 'BRAIN')
-        report = [line for line in report if line.startswith(report_tuple)]
+        func_report = [line for line in func_report if line.startswith(report_tuple)]
         report_dict = dict()
-        for line in report:
+        for line in func_report:
             matter_type_key = line.split()[0]
             volume = line.split()[1]
             unnormalised_volume = line.split()[2]
             report_dict[matter_type_key] = {'volume': volume, 'unnormalised-volume': unnormalised_volume}
+        return report_dict
+    elif basename == 'report.viena':
+        report_dict = dict()
+        number_pattern = re.compile('^[-+]?[0-9]+[.]?[0-9]+$')
+        for line in func_report:
+            split_list = line.split()
+            if split_list and number_pattern.match(split_list[-1]):
+                key = line.split()[0]
+                if len(split_list) == 2:
+                    value = line.split()[1]
+                else:
+                    value = split_list[1:]
+                if key in report_dict.keys():
+                    key = key + '_real_anaysis'
+                else:
+                    pass
+                report_dict[key] = value
         return report_dict
     else:
         log.warning('Unrecognized report name: {}'.format(basename))
@@ -208,8 +226,8 @@ def remove_nifti_name_paths_and_fix_links(input_html_path, output_html_path):
     :param output_html_path: (str) path to which to write output
     :return:
     """
-    with open(input_html_path, 'r', encoding='utf-8') as html_file:
-        soup = bs4.BeautifulSoup(html_file, 'html.parser')
+    with open(input_html_path, 'r', encoding='utf-8') as func_html_file:
+        soup = bs4.BeautifulSoup(func_html_file, 'html.parser')
     # remove path from file name
     rep_pattern = re.compile('/flywheel/v0/input/.*/')
     file_rep_list = soup.find_all(text=rep_pattern)
@@ -227,32 +245,60 @@ def remove_nifti_name_paths_and_fix_links(input_html_path, output_html_path):
         html_out.write(soup)
 
 
+def recursive_file_list(directory):
+    """
+    Recursively lists files in the provided directory (excluding empty directories)
+    :param directory: the directory to zip
+    :return: a list of paths to individual files in a directory
+    """
+    # Initialize file list
+    file_list = list()
+    # Iterate over every base directory
+    for base, dirs, files in os.walk(directory):
+        for file in files:
+            fn = os.path.join(base, file)
+            file_list.append(fn)
+    return file_list
+
+
 def zip_most_outputs(directory, archive_name, promote_list):
     """
     zips up files at the directory into <directory>/<archive_name> and removes originals, excuding files in promote_list
     :param directory: (str) path to the directories with contents to zip
     :param archive_name: (str) name of the output archive
-    :param promote_list: list of files to exclude from archive
+    :param promote_list: list of files for which to retain copy outside of archive
     :return:
     """
     # Get list of files
-    file_list = os.listdir(directory)
+    file_list = recursive_file_list(directory)
     # Determine absolute path for directory
     abspath = os.path.abspath(directory)
-    # Do not zip files in promote list
-    file_list = list(set(file_list) - set(promote_list))
     # Format path to archive
     zip_path = os.path.join(abspath, (archive_name+'.zip'))
     # Get full paths for files
     file_list = [os.path.join(abspath, file) for file in file_list]
-    # Exclude directories for zipping
-    file_list = [file for file in file_list if not os.path.isdir(file)]
-    with zipfile.ZipFile(zip_path, 'w') as zip_it:
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_it:
         for file in file_list:
             # Prevent files from being absurdly nested
-            zip_path = os.path.basename(file)
-            zip_it.write(file, zip_path, compress_type=zipfile.ZIP_DEFLATED)
-            os.remove(file)
+            zip_path = os.path.relpath(file, directory)
+            # Get basename of file
+            base = os.path.basename(file)
+            zip_it.write(file, zip_path)
+            # Don't remove files in promote list
+            if base not in promote_list:
+                os.remove(file)
+
+
+def get_subject_code(fw_client, analysis_id):
+    """
+    Takes and input string and some gear configuration information to get the subject ID
+    :param fw_client: the flywheel client
+    :param analysis_id: analysis ID from the config/context
+    :return:
+    """
+    analysis_obj = fw_client.get(analysis_id)
+    output_subject_code = fw_client.get(analysis_obj.parents.subject).code
+    return output_subject_code
 
 
 if __name__ == '__main__':
@@ -337,28 +383,51 @@ if __name__ == '__main__':
         # Run command and check exit status
         siena_exit_status = subprocess.check_call(command_list)
         if siena_exit_status == 0:
+            # Get subject code and generate timestamp for download-safe renaming
+            subject_code = get_subject_code(fw, gear_context.destination['id'])
+            timestamp = int(time.time())
+            # Specify files to retain outside of the analysis archive
+            promote = ['report.{}'.format(command_list[0]), 'report.viena','.metadata.json']
             # Fix report images
-            html_report_path = os.path.join(output_directory, 'report.html')
-            convert_img_paths_to_b64(html_report_path, html_report_path)
-            # Fix links and names
-            remove_nifti_name_paths_and_fix_links(html_report_path, html_report_path)
-            # Zip files except for the promote list
-            promote = ['report.{}'.format(command_list[0]), 'report.html', '.metadata.json']
-            zip_most_outputs(output_directory, '{}_outputs'.format(command_list[0]), promote)
+            for html_file in ['report.html', 'reportviena.html']:
+                html_report_path = os.path.join(output_directory, html_file)
+                if os.path.isfile(html_report_path):
+                    # Make output file download-safe
+                    # Change name so can be downloaded without collisions
+                    html_report_name = '{}_{}_{}.html'.format(subject_code, html_file.split('.')[0], timestamp)
+                    # Append to promote list
+                    promote.append(html_report_name)
+                    # Add '.html' back to report path so that it gets type set correctly
+                    html_export_path = os.path.join(output_directory, html_report_name)
+                    # Convert images to base64
+                    convert_img_paths_to_b64(html_report_path, html_export_path)
+                    # Fix links and names
+                    remove_nifti_name_paths_and_fix_links(html_export_path, html_export_path)
+            # Make zip name download-safe
+            zip_name = '{}_{}_outputs_{}'.format(subject_code, command_list[0], timestamp)
+            zip_most_outputs(output_directory, zip_name, promote)
             # Get metadata
-            report_path = os.path.join(output_directory, 'report.{}'.format(command_list[0]))
-            # If the report file exists, parse it
-            if os.path.isfile(report_path):
-                report_results = parse_report_metadata(report_path)
-                # Add metadata to analysis info if found
-                if report_results:
-                    log.info('Results: {}'.format(report_results))
-                    # Use client to get analysis object
-                    analysis = fw.get(gear_context.destination['id'])
-                    # Add results to analysis object
-                    analysis.update_info(report_results)
-                    # Add '.log' to report path so that it gets type set correctly
-                    shutil.move(report_path, report_path+'.log')
+            report_file_list = ['report.{}'.format(command_list[0]), 'report.viena']
+            for report in report_file_list:
+                report_path = os.path.join(output_directory, report)
+                # If the report file exists, parse it
+                if os.path.isfile(report_path):
+                    report_results = parse_report_metadata(report_path)
+                    # Add metadata to analysis info if found
+                    if report_results:
+                        log.info('{} results: {}'.format(report, report_results))
+                        # Use client to get analysis object
+                        analysis = fw.get(gear_context.destination['id'])
+                        # Add results to analysis object
+                        update_dict = dict()
+                        update_dict[report.split('.')[1]] = report_results
+                        analysis.update_info(update_dict)
+                        # Change name so can be downloaded without collisions
+                        # Add '.log' to report path so that it gets type set correctly
+                        report_name = '{}_{}_{}.log'.format(subject_code, report.split('.')[1], timestamp)
+                        export_path = os.path.join(output_directory, report_name)
+                        shutil.move(report_path, export_path)
+
             # Log and exit!
             log.info('FSL {} completed successfully!'.format(command_list[0].upper()))
             os.sys.exit(0)
