@@ -187,14 +187,21 @@ def parse_report_metadata(report_file_path):
             report_dict[key] = value
         return report_dict
     elif basename == 'report.sienax':
-        report_tuple = ('GREY', 'WHITE', 'BRAIN')
+        report_tuple = ('GREY', 'WHITE', 'BRAIN', 'pgrey', 'vcsf', 'VSCALING')
         func_report = [line for line in func_report if line.startswith(report_tuple)]
         report_dict = dict()
+        volume_dict = dict()
         for line in func_report:
-            matter_type_key = line.split()[0]
-            volume = line.split()[1]
-            unnormalised_volume = line.split()[2]
-            report_dict[matter_type_key] = {'volume': volume, 'unnormalised-volume': unnormalised_volume}
+            if line.startswith('VSCALING'):
+                key = line.split()[0]
+                value = line.split()[1]
+                report_dict[key] = value
+            else:
+                matter_type_key = line.split()[0]
+                volume = line.split()[1]
+                unnormalised_volume = line.split()[2]
+                volume_dict[matter_type_key] = {'volume': volume, 'unnormalised-volume': unnormalised_volume}
+        report_dict['volume_calculations'] = volume_dict
         return report_dict
     elif basename == 'report.viena':
         report_dict = dict()
@@ -387,7 +394,7 @@ if __name__ == '__main__':
             subject_code = get_subject_code(fw, gear_context.destination['id'])
             timestamp = int(time.time())
             # Specify files to retain outside of the analysis archive
-            promote = ['report.{}'.format(command_list[0]), 'report.viena','.metadata.json']
+            promote = ['report.{}'.format(command_list[0]), 'report.viena', '.metadata.json']
             # Fix report images
             for html_file in ['report.html', 'reportviena.html']:
                 html_report_path = os.path.join(output_directory, html_file)
