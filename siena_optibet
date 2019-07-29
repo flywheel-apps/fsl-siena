@@ -334,7 +334,9 @@ ${FSLDIR}/bin/pngappend gr${A}_halfwayto_${B}a.png + gr${A}_halfwayto_${B}b.png 
 echo "<hr><p><b>Final brain edge movement image</b><p>atrophy <IMG SRC=\".ramp2.gif\"> 0 <IMG SRC=\".ramp.gif\"> \"growth\"<p><IMG BORDER=0 SRC=\"${A}_halfwayto_${B}_render.png\"><p><b>Estimated PBVC: $pbvc_average</b>" >> report.html
 
 if [ $do_viena = yes ] ; then
-    ${FSLDIR}/bin/viena_quant ${A} ${B} ${vienadir}
+    export Ao
+    export Bo
+    ${FSLDIR}/bin/viena_quant ${A} ${B} ${Vmask}
 fi
 
 if [ $debug = 0 ] ; then
