@@ -4,7 +4,7 @@ FROM flywheel/fsl-siena:1.0.0_5.0
 MAINTAINER Flywheel <support@flywheel.io>
 
 # Copy optiBET scripts
-COPY optiBET.sh /usr/local/bin/optiBET.sh
+ADD https://ucla.box.com/shared/static/2pzgonibfs413ec8adlikej7oi2lxbhr.sh /usr/local/bin/optiBET.sh
 RUN chmod +x /usr/local/bin/optiBET.sh
 COPY siena_optibet /usr/lib/fsl/5.0/siena_optibet
 RUN chmod +x /usr/lib/fsl/5.0/siena_optibet
