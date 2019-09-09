@@ -3,7 +3,7 @@
 FROM flywheel/fsl-siena:1.0.1_5.0
 MAINTAINER Flywheel <support@flywheel.io>
 
-# Make directory for flywheel spec (v0)
+# add optibet scripts and replace manifest with optibet manifest
 ENV FLYWHEEL /flywheel/v0
 COPY siena_optibet ${FLYWHEEL}/siena_optibet
 COPY sienax_optibet ${FLYWHEEL}/sienax_optibet
