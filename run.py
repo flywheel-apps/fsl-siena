@@ -389,7 +389,8 @@ if __name__ == '__main__':
         with open(config_file_path) as config_data:
             config_json = json.load(config_data)
         # Get optiBET boolean if obtibet scripts are present
-        if not os.path.isfile('/usr/lib/fsl/5.0/siena_optibet'):
+        if config.get('OPTIBET') and not os.path.isfile('/usr/lib/fsl/5.0/siena_optibet'):
+            log.warning('OPTIBET is not present')
             config.pop('OPTIBET')
         optibet = config.get('OPTIBET')
         # Initialize command_list
