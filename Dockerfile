@@ -1,6 +1,6 @@
 # Create a base docker container that will run FSL's SIENA command
 
-FROM flywheel/fsl-siena:1.0.0_5.0
+FROM flywheel/fsl-siena:1.0.1_5.0
 MAINTAINER Flywheel <support@flywheel.io>
 
 # Copy optiBET scripts
@@ -13,7 +13,7 @@ RUN chmod +x /usr/lib/fsl/5.0/siena_optibet
 
 # Make directory for flywheel spec (v0)
 ENV FLYWHEEL /flywheel/v0
-RUN mkdir -p ${FLYWHEEL}
-COPY run.py ${FLYWHEEL}/run.py
+COPY siena_optibet ${FLYWHEEL}/siena_optibet
+COPY sienax_optibet ${FLYWHEEL}/sienax_optibet
 COPY manifest.json ${FLYWHEEL}/manifest.json
 
