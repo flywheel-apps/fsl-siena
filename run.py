@@ -296,16 +296,80 @@ def zip_most_outputs(directory, archive_name, promote_list):
                 os.remove(file)
 
 
-def get_subject_code(fw_client, analysis_id):
+def generate_analysis_file_label(fw_client, config_dict, extension=None, name_string=None, timestamp=False):
     """
-    Takes and input string and some gear configuration information to get the subject ID
-    :param fw_client: the flywheel client
-    :param analysis_id: analysis ID from the config/context
-    :return:
+    A reasonably robust tool for attempting to generate a unique file name for a flywheel analysis. It will try to
+    use the subject code(s) for the input files as the name, and if it cannot, it will fall back on an optionally
+    provided name_string and timestamp. Timestamp will be added whenever both name_str and subject codes are absent
+    :param fw_client: (flywheel.client.Client) An instance of the flywheel client
+    :param config_dict: (dict) a dictionary representation of config.json
+    :param extension: (str) the file extension
+    :param name_string: (str) optional additional label to add to the file label
+    :param timestamp: (bool) whether to include unix epoch timestamp (sans that which follows the .)
+    :return: analysis_file_label (str)
     """
-    analysis_obj = fw_client.get(analysis_id)
-    output_subject_code = fw_client.get(analysis_obj.parents.subject).code
-    return output_subject_code
+    # Import required packages
+    import time
+    import re
+    # Initialize name list
+    name_list = list()
+    try:
+
+        # if the input has a subject parent, add it to the name
+        for key, value in config_dict['inputs'].items():
+            container_id = value['hierarchy']['id']
+            container_type = value['hierarchy']['type']
+            if container_type in ['project', 'analysis']:
+                pass
+            elif container_type in ['acquisition', 'session', 'subject']:
+                container = fw_client.get(container_id)
+                subject_id = container.parents.subject
+                if not subject_id:
+                    pass
+                else:
+                    subject = fw_client.get_subject(subject_id)
+                    name_list.append(subject.code)
+        # Prevent double printing if the subject is the same
+        name_list = list(set(name_list))
+        # Add custom name_string if it exists
+        if name_string:
+            name_string = str(name_string)
+            name_list.append(name_string)
+        # if timestamp is true or if no subjects or name string, make a string representation timestamp
+        if timestamp or not name_list:
+            time_str = str(int(time.time())).replace('.', '')
+            name_list.append(time_str)
+        # Create an underscore-delimited name
+        analysis_file_label = '_'.join(filter(None, name_list))
+        alphanum_patt = re.compile('[^A-Za-z0-9_]')
+        # Replace non-alphanumeric (or underscore) characters with x
+        analysis_file_label = re.sub(alphanum_patt, 'x', analysis_file_label)
+
+        # Add the extension
+        if isinstance(extension, str):
+            extension = extension.strip('.')
+            analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
+        return analysis_file_label
+    # Just use the name_str, timestamp, and extension if exception is raised
+    except:
+        # Add custom name_string if it exists
+        if name_string:
+            name_string = str(name_string)
+            name_list.append(name_string)
+
+        # if timestamp is true or if no subjects or name string, make a string representation timestamp
+        if timestamp or not name_list:
+            time_str = str(int(time.time())).replace('.', '')
+            name_list.append(time_str)
+        alphanum_patt = re.compile('[^A-Za-z0-9_]')
+        # Replace non-alphanumeric (or underscore) characters with x
+        analysis_file_label = '_'.join(filter(None, name_list))
+        analysis_file_label = re.sub(alphanum_patt, 'x', analysis_file_label)
+        # Add the extension
+        if isinstance(extension, str):
+            extension = extension.strip('.')
+            analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
+        return analysis_file_label
 
 
 if __name__ == '__main__':
@@ -320,6 +384,11 @@ if __name__ == '__main__':
 
         # Get config options
         config = gear_context.config
+        # Get config.json
+        config_file_path = '/flywheel/v0/config.json'
+        with open(config_file_path) as config_data:
+            config_json = json.load(config_data)
+
         # Initialize command_list
         command_list = list()
         # Determine if SIENA or SIENAX
@@ -390,9 +459,6 @@ if __name__ == '__main__':
         # Run command and check exit status
         siena_exit_status = subprocess.check_call(command_list)
         if siena_exit_status == 0:
-            # Get subject code and generate timestamp for download-safe renaming
-            subject_code = get_subject_code(fw, gear_context.destination['id'])
-            timestamp = int(time.time())
             # Specify files to retain outside of the analysis archive
             promote = ['report.{}'.format(command_list[0]), 'report.viena', '.metadata.json']
             # Fix report images
@@ -401,7 +467,9 @@ if __name__ == '__main__':
                 if os.path.isfile(html_report_path):
                     # Make output file download-safe
                     # Change name so can be downloaded without collisions
-                    html_report_name = '{}_{}_{}.html'.format(subject_code, html_file.split('.')[0], timestamp)
+                    html_report_name = generate_analysis_file_label(fw, config_json, extension='html',
+                                                                    name_string=html_file.split('.')[0], timestamp=True)
+
                     # Append to promote list
                     promote.append(html_report_name)
                     # Add '.html' back to report path so that it gets type set correctly
@@ -411,7 +479,9 @@ if __name__ == '__main__':
                     # Fix links and names
                     remove_nifti_name_paths_and_fix_links(html_export_path, html_export_path)
             # Make zip name download-safe
-            zip_name = '{}_{}_outputs_{}'.format(subject_code, command_list[0], timestamp)
+            zip_name = generate_analysis_file_label(fw, config_json, extension=None, name_string=command_list[0],
+                                                    timestamp=True)
+
             zip_most_outputs(output_directory, zip_name, promote)
             # Get metadata
             report_file_list = ['report.{}'.format(command_list[0]), 'report.viena']
@@ -431,7 +501,9 @@ if __name__ == '__main__':
                         analysis.update_info(update_dict)
                         # Change name so can be downloaded without collisions
                         # Add '.log' to report path so that it gets type set correctly
-                        report_name = '{}_{}_{}.log'.format(subject_code, report.split('.')[1], timestamp)
+                        report_name = generate_analysis_file_label(fw, config_json, extension='log',
+                                                                   name_string=report, timestamp=True)
+
                         export_path = os.path.join(output_directory, report_name)
                         shutil.move(report_path, export_path)
 
