@@ -15,5 +15,6 @@ RUN chmod +x /usr/lib/fsl/5.0/siena_optibet
 ENV FLYWHEEL /flywheel/v0
 COPY siena_optibet ${FLYWHEEL}/siena_optibet
 COPY sienax_optibet ${FLYWHEEL}/sienax_optibet
+RUN rm ${FLYWHEEL}/manifest.json
 COPY manifest.json ${FLYWHEEL}/manifest.json
 
