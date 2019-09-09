@@ -388,14 +388,20 @@ if __name__ == '__main__':
         config_file_path = '/flywheel/v0/config.json'
         with open(config_file_path) as config_data:
             config_json = json.load(config_data)
-
+        # Get optiBET boolean if obtibet scripts are present
+        if not os.path.isfile('/usr/lib/fsl/5.0/siena_optibet'):
+            config.pop('OPTIBET')
+        optibet = config.get('OPTIBET')
         # Initialize command_list
         command_list = list()
         # Determine if SIENA or SIENAX
         if gear_context.get_input('NIFTI_1') and gear_context.get_input('NIFTI_2'):
             # Add siena command to command list
-
-            command_list.append('siena')
+            siena_command = 'siena'
+            # Use optibet script when specified
+            if optibet:
+                siena_command = siena_command + '_optibet'
+            command_list.append(siena_command)
             log.info('Getting FSL {} Configuration...'.format(command_list[0].upper()))
             # Get inputs from manifest
             nifti_1 = gear_context.get_input('NIFTI_1')
@@ -423,7 +429,11 @@ if __name__ == '__main__':
 
         elif gear_context.get_input('NIFTI'):
             # Add sienax command to command list
-            command_list.append('sienax')
+            siena_command = 'sienax'
+            # Use optibet script when specified
+            if optibet:
+                siena_command = siena_command + '_optibet'
+            command_list.append(siena_command)
             log.info('Getting FSL {} Configuration...'.format(command_list[0].upper()))
             # Get inputs from manifest
             nifti = gear_context.get_input('NIFTI')
@@ -460,7 +470,7 @@ if __name__ == '__main__':
         siena_exit_status = subprocess.check_call(command_list)
         if siena_exit_status == 0:
             # Specify files to retain outside of the analysis archive
-            promote = ['report.{}'.format(command_list[0]), 'report.viena', '.metadata.json']
+            promote = ['report.{}'.format(command_list[0].split('_')[0]), 'report.viena', '.metadata.json']
             # Fix report images
             for html_file in ['report.html', 'reportviena.html']:
                 html_report_path = os.path.join(output_directory, html_file)
@@ -484,7 +494,7 @@ if __name__ == '__main__':
 
             zip_most_outputs(output_directory, zip_name, promote)
             # Get metadata
-            report_file_list = ['report.{}'.format(command_list[0]), 'report.viena']
+            report_file_list = ['report.{}'.format(command_list[0].split('_')[0]), 'report.viena']
             for report in report_file_list:
                 report_path = os.path.join(output_directory, report)
                 # If the report file exists, parse it
