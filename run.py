@@ -314,23 +314,28 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
     # Initialize name list
     name_list = list()
     try:
-
         # if the input has a subject parent, add it to the name
         for key, value in config_dict['inputs'].items():
-            container_id = value['hierarchy']['id']
-            container_type = value['hierarchy']['type']
-            if container_type in ['project', 'analysis']:
-                pass
-            elif container_type in ['acquisition', 'session', 'subject']:
-                container = fw_client.get(container_id)
-                subject_id = container.parents.subject
-                if not subject_id:
+            if value.get('hierarchy'):
+                container_id = value['hierarchy']['id']
+                container_type = value['hierarchy']['type']
+                if container_type in ['project', 'analysis']:
+                    print('analysis')
                     pass
-                else:
-                    subject = fw_client.get_subject(subject_id)
-                    name_list.append(subject.code)
+                elif container_type in ['acquisition', 'session', 'subject']:
+                    container = fw_client.get(container_id)
+                    subject_id = container.parents.subject
+                    if not subject_id:
+                        pass
+                    else:
+                        subject = fw_client.get_subject(subject_id)
+                        name_list.append(subject.code)
+            else:
+                continue
         # Prevent double printing if the subject is the same
         name_list = list(set(name_list))
+        if not name_list():
+            log.info('Failed to get subject from file inputs.')
         # Add custom name_string if it exists
         if name_string:
             name_string = str(name_string)
@@ -352,6 +357,8 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
         return analysis_file_label
     # Just use the name_str, timestamp, and extension if exception is raised
     except:
+        log.info('Exception occurred when attempting to subject code(s) for file name.')
+
         # Add custom name_string if it exists
         if name_string:
             name_string = str(name_string)
@@ -369,6 +376,7 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
         if isinstance(extension, str):
             extension = extension.strip('.')
             analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
+        log.info('Using {} as file name'.format(analysis_file_label))
         return analysis_file_label
 
 
