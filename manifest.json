@@ -15,7 +15,7 @@
     },
     "gear-builder": {
       "category": "analysis",
-      "image": "flywheel/fsl-siena:1.0.1_5.0_optibet"
+      "image": "flywheel/fsl-siena:1.0.2_5.0_optibet"
     }
   },
   "inputs": {
@@ -61,7 +61,7 @@
       "type": "string"
     },
     "OPTIBET": {
-      "default": false,
+      "default": true,
       "description": "Use optiBET to perform brain-extractions. This option provides extraction even in patients brains, where extensive pathology may be present (see: https://montilab.psych.ucla.edu/fmri-wiki/optibet/). [default=false]",
       "id": "-d",
       "type": "boolean"

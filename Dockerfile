@@ -1,6 +1,6 @@
 # Create a base docker container that will run FSL's SIENA command
 
-FROM flywheel/fsl-siena:1.0.1_5.0
+FROM flywheel/fsl-siena:1.0.2_5.0
 MAINTAINER Flywheel <support@flywheel.io>
 
 # add optibet scripts and replace manifest with optibet manifest
