@@ -318,11 +318,17 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
         for key, value in config_dict['inputs'].items():
             if value.get('hierarchy'):
                 container_id = value['hierarchy'].get('id')
+
                 container_type = value['hierarchy'].get('type')
+                # If it's local, try to find the file in flywheel
+                if container_id == 'aex':
+                    file_name = value['lcoation'].get('name')
+                    log.info('Detected local gear run - attempting to find the file in flywheel')
+                    container_id = container_id_from_file_name(fw_client, container_type, file_name)
                 if container_type in ['project', 'analysis']:
                     log.debug('container type {} does not belong to a subject.'.format(container_type))
                     pass
-                elif container_type in ['acquisition', 'session', 'subject']:
+                elif container_type in ['acquisition', 'session', 'subject'] and container_id:
                     container = fw_client.get(container_id)
                     subject_id = container.parents.subject
                     if not subject_id:
@@ -330,6 +336,9 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
                     else:
                         subject = fw_client.get_subject(subject_id)
                         name_list.append(subject.code)
+                elif not container_id:
+                    log.debug('Could not find container id for input: {}'.format(key))
+                    continue
                 else:
                     log.debug('Did not recognize container type {} when attempting to get input subject.'.format(
                         container_type))
@@ -382,6 +391,61 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
             analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
         log.info('Using {} as file name'.format(analysis_file_label))
         return analysis_file_label
+
+
+def container_finder(fw_client, container_type_str, query):
+    # Define a list of valid container_type_str values
+    valid_container_types = [
+        'acquisition',
+        'gear',
+        'group',
+        'job',
+        'project',
+        'session',
+        'subject',
+        'user'
+    ]
+
+    # If valid container, do the query
+    if container_type_str in valid_container_types:
+        # Add s to make it plural
+        collection = container_type_str + 's'
+        results = getattr(fw, collection).find(query)
+    else:
+        results = None
+
+    return results
+
+
+def container_id_from_file_name(fw_client, container_type, file_name):
+    container_id = None
+    try:
+        # Need to use fw search for analysis files
+        if container_type == 'analysis':
+            query = 'file.name = {}'.format(file_name)
+            results = fw.search(
+                {'return_type': 'file', 'structured_query': query}
+            )
+            if results:
+                container_id = results[0].parent.id
+
+        else:
+            query = 'files.name={}'.format(file_name)
+            results = container_finder(fw_client, container_type, query)
+
+            if isinstance(results, list):
+                if len(results) > 0:
+                    container_id = results[0].id
+
+        return container_id
+
+    except Exception as e:
+        log.info(
+            'Exception when attempting to get parent container id: {}'.format(
+                e
+            )
+        )
+        return None
 
 
 if __name__ == '__main__':
@@ -477,8 +541,9 @@ if __name__ == '__main__':
         echo_command.append('echo')
         echo_command = echo_command + command_list
 
-        log.info('Running FSL {}...'.format(command_list[0].upper()))
+        log.info('Running FSL {} with the command:'.format(command_list[0].upper()))
         subprocess.run(echo_command)
+        log.info('based on the provided manifest config options:\n{}'.format(config))
         # Run command and check exit status
         siena_exit_status = subprocess.check_call(command_list)
         if siena_exit_status == 0:
