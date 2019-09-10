@@ -394,6 +394,13 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
 
 
 def container_finder(fw_client, container_type_str, query):
+    """
+    A function for locating files based on the container type
+    :param fw_client: (flywheel.client.Client) An instance of the flywheel client
+    :param container_type_str: (str) a container type (i.e. 'acquisition' or 'session') that is not 'analysis'
+    :param query: (str) the query for .find()
+    :return: results: (list) of .find() results if valid container type, otherwise None
+    """
     # Define a list of valid container_type_str values
     valid_container_types = [
         'acquisition',
@@ -410,8 +417,10 @@ def container_finder(fw_client, container_type_str, query):
     if container_type_str in valid_container_types:
         # Add s to make it plural
         collection = container_type_str + 's'
+        # Query the collection
         results = getattr(fw, collection).find(query)
     else:
+        log.debug('Unexpected container type: {}'.format(container_type_str))
         results = None
 
     return results
@@ -428,15 +437,23 @@ def container_id_from_file_name(fw_client, container_type, file_name):
             )
             if results:
                 container_id = results[0].parent.id
-
+        # Use .find() for other containers
         else:
+            # Format the query to search by files.name
             query = 'files.name={}'.format(file_name)
+            # Get the results
             results = container_finder(fw_client, container_type, query)
 
             if isinstance(results, list):
                 if len(results) > 0:
                     container_id = results[0].id
-
+                    if len(results) > 1:
+                        # Get a list of the ids to print
+                        result_ids = [result.id for result in results]
+                        log.info(
+                            '{} containers containing file with the name {} found:\n{}'
+                            'Using the first result: {}'.format(len(results), file_name, result_ids,container_id)
+                        )
         return container_id
 
     except Exception as e:
