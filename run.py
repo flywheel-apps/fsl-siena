@@ -322,7 +322,7 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
                 container_type = value['hierarchy'].get('type')
                 # If it's local, try to find the file in flywheel
                 if container_id == 'aex':
-                    file_name = value['lcoation'].get('name')
+                    file_name = value['location'].get('name')
                     log.info('Detected local gear run - attempting to find the file in flywheel')
                     container_id = container_id_from_file_name(fw_client, container_type, file_name)
                 if container_type in ['project', 'analysis']:
