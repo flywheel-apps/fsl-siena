@@ -317,10 +317,10 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
         # if the input has a subject parent, add it to the name
         for key, value in config_dict['inputs'].items():
             if value.get('hierarchy'):
-                container_id = value['hierarchy']['id']
-                container_type = value['hierarchy']['type']
+                container_id = value['hierarchy'].get('id')
+                container_type = value['hierarchy'].get('type')
                 if container_type in ['project', 'analysis']:
-                    print('analysis')
+                    log.debug('container type {} does not belong to a subject.'.format(container_type))
                     pass
                 elif container_type in ['acquisition', 'session', 'subject']:
                     container = fw_client.get(container_id)
@@ -330,12 +330,16 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
                     else:
                         subject = fw_client.get_subject(subject_id)
                         name_list.append(subject.code)
+                else:
+                    log.debug('Did not recognize container type {} when attempting to get input subject.'.format(
+                        container_type))
             else:
                 continue
         # Prevent double printing if the subject is the same
         name_list = list(set(name_list))
-        if not name_list():
+        if not name_list:
             log.info('Failed to get subject from file inputs.')
+
         # Add custom name_string if it exists
         if name_string:
             name_string = str(name_string)
@@ -356,8 +360,8 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
             analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
         return analysis_file_label
     # Just use the name_str, timestamp, and extension if exception is raised
-    except:
-        log.info('Exception occurred when attempting to subject code(s) for file name.')
+    except Exception as e:
+        log.info('Exception occurred when attempting to gather subject code(s) for file name: {}'.format(e))
 
         # Add custom name_string if it exists
         if name_string:
@@ -508,16 +512,27 @@ if __name__ == '__main__':
                 report_path = os.path.join(output_directory, report)
                 # If the report file exists, parse it
                 if os.path.isfile(report_path):
+
                     report_results = parse_report_metadata(report_path)
                     # Add metadata to analysis info if found
                     if report_results:
                         log.info('{} results: {}'.format(report, report_results))
-                        # Use client to get analysis object
-                        analysis = fw.get(gear_context.destination['id'])
-                        # Add results to analysis object
-                        update_dict = dict()
-                        update_dict[report.split('.')[1]] = report_results
-                        analysis.update_info(update_dict)
+                        try:
+                            # Use client to get analysis object
+                            analysis = fw.get(gear_context.destination['id'])
+                            # Add results to analysis object
+                            update_dict = dict()
+                            update_dict[report.split('.')[1]] = report_results
+                            analysis.update_info(update_dict)
+                        except flywheel.rest.ApiException as e:
+                            log.warning(
+                                'Encountered an exception when attempting to upload analysis metadata: {}'.format(e)
+                            )
+                            log.warning(
+                                'Report metrics will not be available in metadata for analysis container {}'.format(
+                                    gear_context.destination['id']
+                                )
+                            )
                         # Change name so can be downloaded without collisions
                         # Add '.log' to report path so that it gets type set correctly
                         report_name = generate_analysis_file_label(fw, config_json, extension='log',
