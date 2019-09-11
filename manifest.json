@@ -8,7 +8,7 @@
   "url": "https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/SIENA",
   "source": "https://github.com/flywheel-apps/fsl-siena",
   "cite": "S.M. Smith, Y. Zhang, M. Jenkinson, J. Chen, P.M. Matthews, A. Federico, and N. De Stefano. Accurate, robust and automated longitudinal and cross-sectional brain change analysis. NeuroImage, 17(1):479-489, 2002.  S.M. Smith, M. Jenkinson, M.W. Woolrich, C.F. Beckmann, T.E.J. Behrens, H. Johansen-Berg, P.R. Bannister, M. De Luca, I. Drobnjak, D.E. Flitney, R. Niazy, J. Saunders, J. Vickers, Y. Zhang, N. De Stefano, J.M. Brady, and P.M. Matthews. Advances in functional and structural MR image analysis and implementation as FSL. NeuroImage, 23(S1):208-219, 2004. If using optiBET option, cite: Lutkenhoff ES, Rosenberg M, Chiang J, Zhang K, Pickard JD, Owen AM, Monti MM. (2014) Optimized Brain Extraction for Pathological Brains (optiBET). PLoS ONE 9(12): e115551. doi:10.1371/journal.pone.0115551",
-  "version": "1.0.1_5.0_optibet",
+  "version": "1.0.2_5.0_optibet",
   "custom": {
     "flywheel": {
       "suite": "FSL"
@@ -62,7 +62,7 @@
     },
     "OPTIBET": {
       "default": true,
-      "description": "Use optiBET to perform brain-extractions. This option provides extraction even in patients brains, where extensive pathology may be present (see: https://montilab.psych.ucla.edu/fmri-wiki/optibet/). [default=false]",
+      "description": "Use optiBET to perform brain-extractions. This option provides extraction even in patients brains, where extensive pathology may be present (see: https://montilab.psych.ucla.edu/fmri-wiki/optibet/). [default=true]",
       "id": "-d",
       "type": "boolean"
     },
