@@ -317,12 +317,18 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
         # if the input has a subject parent, add it to the name
         for key, value in config_dict['inputs'].items():
             if value.get('hierarchy'):
-                container_id = value['hierarchy']['id']
-                container_type = value['hierarchy']['type']
+                container_id = value['hierarchy'].get('id')
+
+                container_type = value['hierarchy'].get('type')
+                # If it's local, try to find the file in flywheel
+                if container_id == 'aex':
+                    file_name = value['location'].get('name')
+                    log.info('Detected local gear run - attempting to find the file in flywheel')
+                    container_id = container_id_from_file_name(fw_client, container_type, file_name)
                 if container_type in ['project', 'analysis']:
-                    print('analysis')
+                    log.debug('container type {} does not belong to a subject.'.format(container_type))
                     pass
-                elif container_type in ['acquisition', 'session', 'subject']:
+                elif container_type in ['acquisition', 'session', 'subject'] and container_id:
                     container = fw_client.get(container_id)
                     subject_id = container.parents.subject
                     if not subject_id:
@@ -330,12 +336,19 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
                     else:
                         subject = fw_client.get_subject(subject_id)
                         name_list.append(subject.code)
+                elif not container_id:
+                    log.debug('Could not find container id for input: {}'.format(key))
+                    continue
+                else:
+                    log.debug('Did not recognize container type {} when attempting to get input subject.'.format(
+                        container_type))
             else:
                 continue
         # Prevent double printing if the subject is the same
         name_list = list(set(name_list))
-        if not name_list():
+        if not name_list:
             log.info('Failed to get subject from file inputs.')
+
         # Add custom name_string if it exists
         if name_string:
             name_string = str(name_string)
@@ -356,8 +369,8 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
             analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
         return analysis_file_label
     # Just use the name_str, timestamp, and extension if exception is raised
-    except:
-        log.info('Exception occurred when attempting to subject code(s) for file name.')
+    except Exception as e:
+        log.info('Exception occurred when attempting to gather subject code(s) for file name: {}'.format(e))
 
         # Add custom name_string if it exists
         if name_string:
@@ -378,6 +391,78 @@ def generate_analysis_file_label(fw_client, config_dict, extension=None, name_st
             analysis_file_label = '.'.join(filter(None, [analysis_file_label, extension]))
         log.info('Using {} as file name'.format(analysis_file_label))
         return analysis_file_label
+
+
+def container_finder(fw_client, container_type_str, query):
+    """
+    A function for locating files based on the container type
+    :param fw_client: (flywheel.client.Client) An instance of the flywheel client
+    :param container_type_str: (str) a container type (i.e. 'acquisition' or 'session') that is not 'analysis'
+    :param query: (str) the query for .find()
+    :return: results: (list) of .find() results if valid container type, otherwise None
+    """
+    # Define a list of valid container_type_str values
+    valid_container_types = [
+        'acquisition',
+        'gear',
+        'group',
+        'job',
+        'project',
+        'session',
+        'subject',
+        'user'
+    ]
+
+    # If valid container, do the query
+    if container_type_str in valid_container_types:
+        # Add s to make it plural
+        collection = container_type_str + 's'
+        # Query the collection
+        results = getattr(fw, collection).find(query)
+    else:
+        log.debug('Unexpected container type: {}'.format(container_type_str))
+        results = None
+
+    return results
+
+
+def container_id_from_file_name(fw_client, container_type, file_name):
+    container_id = None
+    try:
+        # Need to use fw search for analysis files
+        if container_type == 'analysis':
+            query = 'file.name = {}'.format(file_name)
+            results = fw.search(
+                {'return_type': 'file', 'structured_query': query}
+            )
+            if results:
+                container_id = results[0].parent.id
+        # Use .find() for other containers
+        else:
+            # Format the query to search by files.name
+            query = 'files.name={}'.format(file_name)
+            # Get the results
+            results = container_finder(fw_client, container_type, query)
+
+            if isinstance(results, list):
+                if len(results) > 0:
+                    container_id = results[0].id
+                    if len(results) > 1:
+                        # Get a list of the ids to print
+                        result_ids = [result.id for result in results]
+                        log.info(
+                            '{} containers containing file with the name {} found:\n{}'
+                            'Using the first result: {}'.format(len(results), file_name, result_ids,container_id)
+                        )
+        return container_id
+
+    except Exception as e:
+        log.info(
+            'Exception when attempting to get parent container id: {}'.format(
+                e
+            )
+        )
+        return None
 
 
 if __name__ == '__main__':
@@ -473,8 +558,9 @@ if __name__ == '__main__':
         echo_command.append('echo')
         echo_command = echo_command + command_list
 
-        log.info('Running FSL {}...'.format(command_list[0].upper()))
+        log.info('Running FSL {} with the command:'.format(command_list[0].upper()))
         subprocess.run(echo_command)
+        log.info('based on the provided manifest config options:\n{}'.format(config))
         # Run command and check exit status
         siena_exit_status = subprocess.check_call(command_list)
         if siena_exit_status == 0:
@@ -508,16 +594,27 @@ if __name__ == '__main__':
                 report_path = os.path.join(output_directory, report)
                 # If the report file exists, parse it
                 if os.path.isfile(report_path):
+
                     report_results = parse_report_metadata(report_path)
                     # Add metadata to analysis info if found
                     if report_results:
                         log.info('{} results: {}'.format(report, report_results))
-                        # Use client to get analysis object
-                        analysis = fw.get(gear_context.destination['id'])
-                        # Add results to analysis object
-                        update_dict = dict()
-                        update_dict[report.split('.')[1]] = report_results
-                        analysis.update_info(update_dict)
+                        try:
+                            # Use client to get analysis object
+                            analysis = fw.get(gear_context.destination['id'])
+                            # Add results to analysis object
+                            update_dict = dict()
+                            update_dict[report.split('.')[1]] = report_results
+                            analysis.update_info(update_dict)
+                        except flywheel.rest.ApiException as e:
+                            log.warning(
+                                'Encountered an exception when attempting to upload analysis metadata: {}'.format(e)
+                            )
+                            log.warning(
+                                'Report metrics will not be available in metadata for analysis container {}'.format(
+                                    gear_context.destination['id']
+                                )
+                            )
                         # Change name so can be downloaded without collisions
                         # Add '.log' to report path so that it gets type set correctly
                         report_name = generate_analysis_file_label(fw, config_json, extension='log',
