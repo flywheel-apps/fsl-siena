@@ -1,6 +1,6 @@
 # Create a base docker container that will run FSL's SIENA command
 
-FROM flywheel/fsl-base:5.0_neurodeb
+FROM flywheel/fsl-base:5.0-xenial
 MAINTAINER Flywheel <support@flywheel.io>
 
 

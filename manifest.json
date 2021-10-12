@@ -122,7 +122,9 @@
     "FSLWISH": "/usr/bin/wish",
     "LD_LIBRARY_PATH": "/usr/lib/fsl/5.0",
     "PATH": "/usr/lib/fsl/5.0:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-    "POSSUMDIR": "/usr/share/fsl/5.0"
+    "POSSUMDIR": "/usr/share/fsl/5.0",
+    "REQUESTS_CA_BUNDLE":"/etc/ssl/certs/ca-certificates.crt"
+
   },
   "command": "python3 run.py"
 }
