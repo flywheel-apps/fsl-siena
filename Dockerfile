@@ -6,7 +6,9 @@ MAINTAINER Flywheel <support@flywheel.io>
 
 # Install python package dependencies
 COPY requirements.txt ./requirements.txt
-RUN pip3 install -r requirements.txt
+# This now has a venv to get python 3.7 working (python3.5 pip is depricated and broken)
+RUN . venv/bin/activate && \
+    pip3 install -r requirements.txt
 
 # Make directory for flywheel spec (v0)
 ENV FLYWHEEL /flywheel/v0

@@ -126,5 +126,5 @@
     "REQUESTS_CA_BUNDLE":"/etc/ssl/certs/ca-certificates.crt"
 
   },
-  "command": "python3 run.py"
+  "command": "source /venv/bin/activate && python3 run.py"
 }
